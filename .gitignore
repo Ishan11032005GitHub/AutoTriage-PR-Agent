@@ -1,0 +1,39 @@
+# =========================
+# Secrets / credentials
+# =========================
+.env
+
+# =========================
+# Cloned target repositories
+# (contain .git with token)
+# =========================
+repos/
+
+# =========================
+# Python artifacts
+# =========================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# =========================
+# Virtual environments
+# =========================
+venv/
+.env/
+.venv/
+
+# =========================
+# OS / editor junk
+# =========================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# =========================
+# Logs
+# =========================
+*.log
