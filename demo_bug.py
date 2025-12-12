@@ -1,2 +1,4 @@
 def get_username(user):
-    return user.profile.name  # ❌ crashes if profile is None
+    if user.profile:
+        return user.profile.name
+    return None
