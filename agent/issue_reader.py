@@ -3,6 +3,7 @@ from config import GITHUB_TOKEN
 
 HEADERS = {"Authorization": f"token {GITHUB_TOKEN}"}
 
+
 def fetch_bug_issues(owner, repo):
     url = f"https://api.github.com/repos/{owner}/{repo}/issues"
     res = requests.get(url, headers=HEADERS)
@@ -12,7 +13,7 @@ def fetch_bug_issues(owner, repo):
 
     data = res.json()
     if not isinstance(data, list):
-        raise RuntimeError(f"Unexpected response: {data}")
+        raise RuntimeError("Unexpected GitHub API response")
 
     bugs = []
     for i in data:
