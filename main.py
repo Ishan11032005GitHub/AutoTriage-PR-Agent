@@ -5,9 +5,9 @@ import time
 
 from agent.issue_reader import fetch_bug_issues
 from agent.file_finder import search_repo
-from agent.patch_generator import generate_patch
+from agent.patch_generator import generate_fixed_content
 from agent.pr_creator import create_pr
-from git_ops import create_branch_and_apply_patch
+from git_ops import create_branch_and_commit
 from config import GITHUB_TOKEN
 
 DRY_RUN = False   # set True to disable PR creation
@@ -23,15 +23,15 @@ def prepare_repo(owner, repo):
     path = f"./repos/{owner}__{repo}"
     clone_url = f"https://{GITHUB_TOKEN}@github.com/{owner}/{repo}.git"
 
-    t0 = time.time()
     if not os.path.exists(path):
         print(f"📥 Cloning {owner}/{repo}")
         subprocess.run(["git", "clone", clone_url, path], check=True)
     else:
         print(f"🔄 Updating {owner}/{repo}")
-        subprocess.run(["git", "-C", path, "pull"], check=True)
+        subprocess.run(["git", "-C", path, "fetch"], check=True)
+        subprocess.run(["git", "-C", path, "checkout", "main"], check=True)
+        subprocess.run(["git", "-C", path, "reset", "--hard", "origin/main"], check=True)
 
-    print(f"⏱️ repo prep: {time.time() - t0:.2f}s")
     return path
 
 
@@ -72,9 +72,9 @@ def run():
         with open(file_path, "r", errors="ignore") as f:
             content = f.read()
 
-        patch = generate_patch(issue, content, os.path.basename(file_path))
-        if not patch:
-            print("❌ Patch rejected. Skipping.")
+        new_content = generate_fixed_content(issue, content, os.path.basename(file_path))
+        if not new_content:
+            print("❌ No safe fix produced. Skipping.")
             continue
 
         score = confidence_score(True, True, len(content.splitlines()))
@@ -86,7 +86,7 @@ def run():
             print("🧪 DRY RUN: PR not created")
             continue
 
-        branch = create_branch_and_apply_patch(repo_path, patch)
+        branch = create_branch_and_commit(repo_path, file_path, new_content)
         create_pr(owner, repo, branch, issue)
 
         print(f"✅ PR created for issue #{issue['number']}")
