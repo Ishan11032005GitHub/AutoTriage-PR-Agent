@@ -1,55 +1,21 @@
-from openai import OpenAI
-from openai import RateLimitError, APIStatusError
+import google.generativeai as genai
+import os
 
-client = OpenAI()
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-
-def is_safe_patch(patch: str) -> bool:
-    if not patch.startswith("diff --git"):
-        return False
-
-    forbidden = [
-        "rm -rf",
-        "DROP TABLE",
-        "ALTER USER",
-        "DELETE FROM",
-        "TRUNCATE",
-        "chmod 777",
-    ]
-    return not any(f in patch for f in forbidden)
+gemini_model = genai.GenerativeModel("gemini-1.5-flash")
 
 
-def generate_patch(issue, file_content, file_name):
-    prompt = f"""Return a unified diff ONLY.
-Rules:
-- Only null/undefined guards
-- No refactors
-- No logic change
-
-Issue:
-{issue['title']}
-{issue.get('body','')}
-
-File:
-{file_content}
-"""
-
+def gemini_generate_patch(prompt: str) -> str | None:
     try:
-        resp = client.responses.create(
-            model="gpt-4.1-mini",
-            input=prompt
+        resp = gemini_model.generate_content(
+            prompt,
+            generation_config={
+                "temperature": 0,
+                "max_output_tokens": 800
+            }
         )
-        patch = resp.output_text.strip()
-
-    except RateLimitError:
-        print("❌ OpenAI quota/billing issue.")
+        return resp.text.strip()
+    except Exception as e:
+        print(f"❌ Gemini error: {e}")
         return None
-    except APIStatusError as e:
-        print(f"❌ OpenAI API error: {e.status_code}")
-        return None
-
-    if not is_safe_patch(patch):
-        return None
-
-    return patch.replace("a/file.py", f"a/{file_name}") \
-                 .replace("b/file.py", f"b/{file_name}")
