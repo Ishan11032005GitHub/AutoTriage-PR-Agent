@@ -7,6 +7,7 @@ from agent.issue_reader import fetch_bug_issues
 from agent.file_finder import search_repo
 from agent.patch_generator import generate_fixed_content
 from agent.pr_creator import create_pr
+from agent.pr_guard import pr_exists
 from git_ops import create_branch_and_commit
 from config import GITHUB_TOKEN
 
@@ -61,6 +62,12 @@ def run():
         issue_t0 = time.time()
         print(f"➡️ Processing issue #{issue['number']}")
 
+        # 1️⃣ PR guard FIRST
+        if pr_exists(owner, repo, issue["number"]):
+            print("⏭️ PR already exists for this issue. Skipping.")
+            continue
+
+        # 2️⃣ File search
         keywords = issue["title"].split()
         file_path = search_repo(keywords, repo_path)
         print(f"📄 File candidate: {file_path}")
@@ -69,15 +76,32 @@ def run():
             print("❌ Cannot locate relevant file. Skipping.")
             continue
 
+        # 3️⃣ Read file
         with open(file_path, "r", errors="ignore") as f:
             content = f.read()
 
-        new_content = generate_fixed_content(issue, content, os.path.basename(file_path))
+        # 4️⃣ Generate fix
+        new_content = generate_fixed_content(
+            issue,
+            content,
+            os.path.basename(file_path)
+        )
+
         if not new_content:
             print("❌ No safe fix produced. Skipping.")
             continue
 
-        score = confidence_score(True, True, len(content.splitlines()))
+        # 5️⃣ Confidence gate
+        file_found = file_path is not None
+        patch_generated = new_content is not None
+
+        score = confidence_score(
+            file_found=file_found,
+            patch_generated=patch_generated,
+            file_lines=len(content.splitlines())
+        )
+
+
         if score < 0.7:
             print(f"⚠️ Low confidence ({score:.2f}). Skipping PR.")
             continue
@@ -86,11 +110,19 @@ def run():
             print("🧪 DRY RUN: PR not created")
             continue
 
-        branch = create_branch_and_commit(repo_path, file_path, new_content)
+        # 6️⃣ Commit + PR
+        branch = create_branch_and_commit(
+            repo_path,
+            file_path,
+            new_content,
+            issue["number"]
+        )
+
         create_pr(owner, repo, branch, issue)
 
         print(f"✅ PR created for issue #{issue['number']}")
         print(f"⏱️ issue processed in {time.time() - issue_t0:.2f}s")
+
 
 
 if __name__ == "__main__":
